@@ -5,6 +5,13 @@ import uvicorn
 import json
 from utils import PIIMasker
 import pickle
+import os
+import logging
+import argparse
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Import the model class
 from models import EmailClassifier
@@ -64,13 +71,30 @@ class EmailResponse(BaseModel):
         }
 
 # Load the trained model
-model_path = "model/email_classifier.pkl"
-try:
-    with open(model_path, 'rb') as f:
-        email_classifier = pickle.load(f)
-except FileNotFoundError:
-    email_classifier = None
-    print(f"Warning: Model file {model_path} not found. API will not classify emails until model is loaded.")
+MODEL_DIR = "model"
+MODEL_PATH = os.path.join(MODEL_DIR, "email_classifier.pkl")
+
+def load_model():
+    """Load the trained model with proper error handling."""
+    try:
+        if not os.path.exists(MODEL_DIR):
+            os.makedirs(MODEL_DIR)
+            logger.warning(f"Created model directory: {MODEL_DIR}")
+            
+        if not os.path.exists(MODEL_PATH):
+            logger.error(f"Model file not found at {MODEL_PATH}")
+            return None
+            
+        with open(MODEL_PATH, 'rb') as f:
+            model = pickle.load(f)
+        logger.info("Model loaded successfully!")
+        return model
+    except Exception as e:
+        logger.error(f"Error loading model: {str(e)}")
+        return None
+
+# Load the model
+email_classifier = load_model()
 
 # Initialize the PII masker
 pii_masker = PIIMasker()
@@ -98,34 +122,42 @@ async def classify_email(request: EmailRequest) -> Dict[str, Any]:
     if email_classifier is None:
         raise HTTPException(
             status_code=503,
-            detail="Email classifier model is not loaded. Please ensure the model is properly trained and loaded."
+            detail="Service unavailable. Model not loaded. Please ensure the model is properly trained and loaded."
+        )
+    
+    if not request.email_body or not isinstance(request.email_body, str):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid email body. Please provide a non-empty string."
         )
     
     try:
-        # Get the email text
-        email_body = request.email_body
-        
         # Mask PII in the email
-        masked_email, masked_entities = pii_masker.mask_pii(email_body)
+        masked_email, masked_entities = pii_masker.mask_pii(request.email_body)
         
         # Classify the masked email
-        category = email_classifier.predict([masked_email])[0]
+        try:
+            category = email_classifier.predict([masked_email])[0]
+        except Exception as e:
+            logger.error(f"Error during model prediction: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error during model prediction: {str(e)}"
+            )
         
         # Demask the email
         demasked_email = pii_masker.unmask_pii(masked_email)
         
-        # Prepare response
-        response = {
-            "input_email_body": email_body,
+        return {
+            "input_email_body": request.email_body,
             "masked_email": masked_email,
             "demasked_email": demasked_email,
             "category": category,
             "masked_entities": masked_entities
         }
         
-        return response
-        
     except Exception as e:
+        logger.error(f"Error processing email: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Error processing email: {str(e)}"
@@ -153,22 +185,6 @@ async def health_check() -> Dict[str, Any]:
         "version": "1.0.0"
     }
 
-def load_model(model_path: str) -> None:
-    """
-    Load the email classification model.
-    
-    Args:
-        model_path: Path to the saved model
-    """
-    global email_classifier
-    try:
-        with open(model_path, 'rb') as f:
-            email_classifier = pickle.load(f)
-        print(f"Model loaded successfully from {model_path}")
-    except Exception as e:
-        print(f"Error loading model: {e}")
-        email_classifier = None
-
 def start_api(host: str = "0.0.0.0", port: int = 8000):
     """
     Start the FastAPI server.
@@ -195,4 +211,9 @@ def start_api(host: str = "0.0.0.0", port: int = 8000):
         raise
 
 if __name__ == "__main__":
-    start_api()
+    parser = argparse.ArgumentParser(description='Start the Email Classification API')
+    parser.add_argument('--host', type=str, default='0.0.0.0', help='Host to bind to')
+    parser.add_argument('--port', type=int, default=8000, help='Port to listen on')
+    args = parser.parse_args()
+    
+    start_api(host=args.host, port=args.port)

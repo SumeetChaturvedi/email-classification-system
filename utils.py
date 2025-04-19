@@ -98,11 +98,10 @@ class PIIMasker:
             
             matches = list(re.finditer(pattern, unmasked_text))
             for i, match in enumerate(matches):
-                entity_id = f"{entity_type}_{i+1}"
-                if entity_type in self.masked_entities and entity_id in self.masked_entities[entity_type]:
-                    original_value = self.masked_entities[entity_type][entity_id]
-                    start, end = match.span()
-                    unmasked_text = unmasked_text[:start] + original_value + unmasked_text[end:]
+                masked_id = f"{entity_type}_{i+1}"
+                if entity_type in self.masked_entities and masked_id in self.masked_entities[entity_type]:
+                    original_entity = self.masked_entities[entity_type][masked_id]
+                    unmasked_text = unmasked_text[:match.start()] + original_entity + unmasked_text[match.end():]
         
         return unmasked_text
 

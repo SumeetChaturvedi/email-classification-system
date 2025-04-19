@@ -1,126 +1,44 @@
 import os
-import argparse
 import pandas as pd
 from typing import Dict, Any
 import pickle
 import gradio as gr
-from utils import load_and_preprocess_data, split_data, PIIMasker
-from models import train_model, evaluate_model, EmailClassifier
-from api import app, load_model
+from utils import PIIMasker
+from models import EmailClassifier
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize the PII masker
 pii_masker = PIIMasker()
 
 # Load the trained model
-model_path = "model/email_classifier.pkl"
-try:
-    with open(model_path, 'rb') as f:
-        email_classifier = pickle.load(f)
-except FileNotFoundError:
-    email_classifier = None
-    print(f"Warning: Model file {model_path} not found. Please train the model first.")
+MODEL_DIR = "model"
+MODEL_PATH = os.path.join(MODEL_DIR, "email_classifier.pkl")
 
-def parse_arguments():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Email Classification System")
-    parser.add_argument("--mode", choices=["train", "evaluate", "api"], default="api",
-                        help="Mode to run the application in")
-    parser.add_argument("--data_path", type=str, default="data/emails.csv",
-                    help="Path to the dataset")
-    parser.add_argument("--model_type", choices=["traditional", "transformer"], default="traditional",
-                        help="Type of model to use")
-    parser.add_argument("--classifier_type", choices=["naive_bayes", "random_forest", "svm"], 
-                        default="naive_bayes", help="Type of classifier for traditional models")
-    parser.add_argument("--model_path", type=str, default="model/email_classifier.pkl",
-                        help="Path to save/load the model")
-    parser.add_argument("--test_size", type=float, default=0.2,
-                        help="Proportion of data to use for testing")
-    
-    return parser.parse_args()
-
-def train(args) -> Dict[str, Any]:
-    """
-    Train the email classification model.
-    
-    Args:
-        args: Command line arguments
-        
-    Returns:
-        Dictionary with training results
-    """
-    print(f"Loading data from {args.data_path}...")
-    df = load_and_preprocess_data(args.data_path)
-    
-    print(f"Splitting data with test_size={args.test_size}...")
-    train_df, test_df = split_data(df, test_size=args.test_size)
-    
-    print(f"Training {args.model_type} model with {args.classifier_type} classifier...")
-    model = train_model(train_df, model_type=args.model_type, classifier_type=args.classifier_type)
-    
-    # Save the model
-    os.makedirs(os.path.dirname(args.model_path), exist_ok=True)
-    model.save_model(args.model_path)
-    print(f"Model saved to {args.model_path}")
-    
-    # Evaluate on test data
-    print("Evaluating model on test data...")
-    results = evaluate_model(model, test_df)
-    
-    return {
-        "model": model,
-        "results": results,
-        "train_size": len(train_df),
-        "test_size": len(test_df)
-    }
-
-def evaluate(args) -> Dict[str, Any]:
-    """
-    Evaluate a trained model.
-    
-    Args:
-        args: Command line arguments
-        
-    Returns:
-        Dictionary with evaluation results
-    """
-    print(f"Loading data from {args.data_path}...")
-    df = load_and_preprocess_data(args.data_path)
-    
-    print(f"Loading model from {args.model_path}...")
-    with open(args.model_path, 'rb') as f:
-        model = pickle.load(f)
-    
-    print("Evaluating model...")
-    results = evaluate_model(model, df)
-    
-    return {
-        "results": results,
-        "data_size": len(df)
-    }
-
-def start_api(args) -> None:
-    """
-    Start the API server.
-    
-    Args:
-        args: Command line arguments
-    """
-    from api import start_api as start_api_server, load_model
-    
-    print(f"Loading model from {args.model_path}...")
+def load_model():
+    """Load the trained model with proper error handling."""
     try:
-        load_model(args.model_path)
-        print("Model loaded successfully!")
+        if not os.path.exists(MODEL_DIR):
+            os.makedirs(MODEL_DIR)
+            logger.warning(f"Created model directory: {MODEL_DIR}")
+            
+        if not os.path.exists(MODEL_PATH):
+            logger.error(f"Model file not found at {MODEL_PATH}")
+            return None
+            
+        with open(MODEL_PATH, 'rb') as f:
+            model = pickle.load(f)
+        logger.info("Model loaded successfully!")
+        return model
     except Exception as e:
-        print(f"Error loading model: {e}")
-        return
-    
-    print("Starting API server...")
-    try:
-        start_api_server(host="0.0.0.0", port=8000)
-    except Exception as e:
-        print(f"Error starting API server: {e}")
-        return
+        logger.error(f"Error loading model: {str(e)}")
+        return None
+
+# Load the model
+email_classifier = load_model()
 
 def process_email(email_text: str) -> Dict[str, Any]:
     """
@@ -137,12 +55,23 @@ def process_email(email_text: str) -> Dict[str, Any]:
             "error": "Model not loaded. Please ensure the model is properly trained and loaded."
         }
     
+    if not email_text or not isinstance(email_text, str):
+        return {
+            "error": "Invalid email text. Please provide a non-empty string."
+        }
+    
     try:
         # Mask PII in the email
         masked_email, masked_entities = pii_masker.mask_pii(email_text)
         
         # Classify the masked email
-        category = email_classifier.predict([masked_email])[0]
+        try:
+            category = email_classifier.predict([masked_email])[0]
+        except Exception as e:
+            logger.error(f"Error during model prediction: {str(e)}")
+            return {
+                "error": f"Error during model prediction: {str(e)}"
+            }
         
         # Demask the email
         demasked_email = pii_masker.unmask_pii(masked_email)
@@ -157,6 +86,7 @@ def process_email(email_text: str) -> Dict[str, Any]:
         }
         
     except Exception as e:
+        logger.error(f"Error processing email: {str(e)}")
         return {
             "error": f"Error processing email: {str(e)}"
         }
@@ -211,19 +141,6 @@ demo = gr.Interface(
     ]
 )
 
-def main():
-    """Main function to run the application."""
-    args = parse_arguments()
-    
-    if args.mode == "train":
-        train(args)
-    elif args.mode == "evaluate":
-        evaluate(args)
-    elif args.mode == "api":
-        start_api(args)
-    else:
-        print(f"Unknown mode: {args.mode}")
-
+# Launch the interface
 if __name__ == "__main__":
-    main()
     demo.launch()
