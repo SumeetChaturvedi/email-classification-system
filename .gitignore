@@ -4,7 +4,6 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
 build/
 develop-eggs/
 dist/
@@ -16,12 +15,15 @@ lib64/
 parts/
 sdist/
 var/
+wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 
 # Virtual Environment
-.venv/
+.env
+.venv
+env/
 venv/
 ENV/
 
@@ -41,10 +43,7 @@ ehthumbs.db
 Thumbs.db
 
 # Model files
-model/*.pkl
-model/*_model
-model/*_tokenizer
-model/*_metadata.pkl
+model/email_classifier.pkl
 
 # Logs
 logs/

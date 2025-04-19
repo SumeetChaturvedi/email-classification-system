@@ -1,58 +1,39 @@
 # Email Classification System
 
-This system processes support emails by:
-1. Masking PII (Personal Identifiable Information)
-2. Classifying the email into categories
-3. Returning both masked and demasked versions
+This is an email classification system that:
+1. Masks PII (Personal Identifiable Information) in emails
+2. Classifies emails into categories
+3. Returns both masked and demasked versions
 
 ## Features
-
-- PII Masking: Automatically detects and masks sensitive information like:
-  - Names
-  - Email addresses
-  - Phone numbers
-  - Credit card information
-  - Aadhar numbers
-  - Dates of birth
-
-- Email Classification: Categorizes emails into different types (e.g., billing, support, technical)
+- PII Detection and Masking
+- Email Classification
+- Real-time Processing
+- User-friendly Interface
 
 ## How to Use
-
 1. Enter your email text in the input box
 2. Click "Submit" to process the email
-3. View the results showing:
+3. View the results including:
    - Original email
-   - Masked version (with PII hidden)
+   - Masked email (with PII removed)
    - Classification category
    - List of masked entities
 
-## Example
+## Examples
+Try these examples:
+- "Hello, my name is John Doe and my email is johndoe@example.com. I'm having trouble with my billing."
+- "Hi, I need to reset my password. My phone number is 123-456-7890."
+- "Please update my credit card ending in 1234. My CVV is 123."
 
-Input:
-```
-Hello, my name is John Doe and my email is johndoe@example.com. I'm having trouble with my billing.
-```
+## Privacy
+All processing is done locally in your browser. No data is stored or transmitted to external servers.
 
-Output:
-```
-=== Email Classification Results ===
+## Model Information
+The system uses a machine learning model trained on support email data to classify emails into categories.
 
-Input Email:
-Hello, my name is John Doe and my email is johndoe@example.com. I'm having trouble with my billing.
-
-Category: billing
-
-Masked Email:
-Hello, my name is [full_name] and my email is [email]. I'm having trouble with my billing.
-
-Demasked Email:
-Hello, my name is John Doe and my email is johndoe@example.com. I'm having trouble with my billing.
-
-Masked Entities:
-- full_name: John Doe
-- email: johndoe@example.com
-```
+## License
+MIT License
 
 ## Technical Details
 

@@ -1,11 +1,9 @@
 import os
-import pandas as pd
-from typing import Dict, Any
-import pickle
 import gradio as gr
 from utils import PIIMasker
-from models import EmailClassifier
+import pickle
 import logging
+import sys
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -15,7 +13,7 @@ logger = logging.getLogger(__name__)
 pii_masker = PIIMasker()
 
 # Load the trained model
-MODEL_DIR = "model"
+MODEL_DIR = "model"  # Changed back to "model" directory
 MODEL_PATH = os.path.join(MODEL_DIR, "email_classifier.pkl")
 
 def load_model():
@@ -40,7 +38,7 @@ def load_model():
 # Load the model
 email_classifier = load_model()
 
-def process_email(email_text: str) -> Dict[str, Any]:
+def process_email(email_text: str) -> str:
     """
     Process a single email: mask PII, classify, and return results.
     
@@ -48,17 +46,13 @@ def process_email(email_text: str) -> Dict[str, Any]:
         email_text: The email text to process
         
     Returns:
-        Dictionary containing processing results
+        Formatted results string
     """
     if email_classifier is None:
-        return {
-            "error": "Model not loaded. Please ensure the model is properly trained and loaded."
-        }
+        return "Error: Model not loaded. Please ensure the model is properly trained and loaded."
     
     if not email_text or not isinstance(email_text, str):
-        return {
-            "error": "Invalid email text. Please provide a non-empty string."
-        }
+        return "Error: Invalid email text. Please provide a non-empty string."
     
     try:
         # Mask PII in the email
@@ -69,55 +63,33 @@ def process_email(email_text: str) -> Dict[str, Any]:
             category = email_classifier.predict([masked_email])[0]
         except Exception as e:
             logger.error(f"Error during model prediction: {str(e)}")
-            return {
-                "error": f"Error during model prediction: {str(e)}"
-            }
+            return f"Error during model prediction: {str(e)}"
         
         # Demask the email
         demasked_email = pii_masker.unmask_pii(masked_email)
         
-        # Prepare response
-        return {
-            "input_email": email_text,
-            "masked_email": masked_email,
-            "demasked_email": demasked_email,
-            "category": category,
-            "masked_entities": masked_entities
-        }
+        # Format the results
+        output = []
+        output.append("=== Email Classification Results ===")
+        output.append(f"\nInput Email:\n{email_text}")
+        output.append(f"\nCategory: {category}")
+        output.append(f"\nMasked Email:\n{masked_email}")
+        output.append(f"\nDemasked Email:\n{demasked_email}")
+        
+        if masked_entities:
+            output.append("\nMasked Entities:")
+            for entity in masked_entities:
+                output.append(f"- {entity['classification']}: {entity['entity']}")
+        
+        return "\n".join(output)
         
     except Exception as e:
         logger.error(f"Error processing email: {str(e)}")
-        return {
-            "error": f"Error processing email: {str(e)}"
-        }
-
-def format_results(results: Dict[str, Any]) -> str:
-    """Format the results for display."""
-    if "error" in results:
-        return f"Error: {results['error']}"
-    
-    output = []
-    output.append("=== Email Classification Results ===")
-    output.append(f"\nInput Email:\n{results['input_email']}")
-    output.append(f"\nCategory: {results['category']}")
-    output.append(f"\nMasked Email:\n{results['masked_email']}")
-    output.append(f"\nDemasked Email:\n{results['demasked_email']}")
-    
-    if results['masked_entities']:
-        output.append("\nMasked Entities:")
-        for entity in results['masked_entities']:
-            output.append(f"- {entity['classification']}: {entity['entity']}")
-    
-    return "\n".join(output)
-
-def process_and_display(email_text: str) -> str:
-    """Process the email and return formatted results."""
-    results = process_email(email_text)
-    return format_results(results)
+        return f"Error processing email: {str(e)}"
 
 # Create Gradio interface
 demo = gr.Interface(
-    fn=process_and_display,
+    fn=process_email,
     inputs=gr.Textbox(
         label="Email Text",
         placeholder="Enter your email text here...",
@@ -143,4 +115,4 @@ demo = gr.Interface(
 
 # Launch the interface
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(server_name="0.0.0.0", server_port=7860)
