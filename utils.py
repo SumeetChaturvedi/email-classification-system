@@ -108,7 +108,7 @@ class PIIMasker:
 
 def load_and_preprocess_data(file_path: str) -> pd.DataFrame:
     # Load the data
-    df = pd.read_csv('/Users/sumeetchaturvedi/Downloads/emails.csv')
+    df = pd.read_csv(file_path)
     
     # Create an instance of PIIMasker
     masker = PIIMasker()
@@ -117,7 +117,7 @@ def load_and_preprocess_data(file_path: str) -> pd.DataFrame:
     masked_emails = []
     entities_list = []
     
-    for email in df['email']:  # Changed from 'email_body' to 'email'
+    for email in df['email']:
         masked_email, entities = masker.mask_pii(email)
         masked_emails.append(masked_email)
         entities_list.append(entities)
