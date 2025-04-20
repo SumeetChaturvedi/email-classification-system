@@ -4,7 +4,8 @@ from utils import PIIMasker
 import pickle
 import logging
 import joblib
-from sklearn.base import BaseEstimator
+import numpy as np
+from models import EmailClassifier, TraditionalMLClassifier  # Import from models.py file
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -28,12 +29,26 @@ def load_model():
             logger.error(f"Model file not found at {MODEL_PATH}")
             return None
             
-        with open(MODEL_PATH, 'rb') as f:
-            model = joblib.load(f)
-        logger.info("Model loaded successfully!")
-        return model
+        # Try loading with pickle first
+        try:
+            with open(MODEL_PATH, 'rb') as f:
+                model = pickle.load(f)
+            logger.info("Model loaded successfully with pickle!")
+            return model
+        except Exception as e:
+            logger.error(f"Error during pickle loading: {str(e)}")
+            
+            # Try loading with joblib
+            try:
+                model = joblib.load(MODEL_PATH)
+                logger.info("Model loaded successfully with joblib!")
+                return model
+            except Exception as e:
+                logger.error(f"Error during joblib loading: {str(e)}")
+                return None
+                
     except Exception as e:
-        logger.error(f"Error loading model: {str(e)}")
+        logger.error(f"Unexpected error during model loading: {str(e)}")
         return None
 
 # Load the model
@@ -61,7 +76,11 @@ def process_email(email_text: str) -> str:
         
         # Classify the masked email
         try:
-            category = email_classifier.predict([masked_email])[0]
+            if hasattr(email_classifier, 'predict'):
+                category = email_classifier.predict([masked_email])[0]
+            else:
+                # If the model is a scikit-learn pipeline directly
+                category = email_classifier.predict([masked_email])[0]
         except Exception as e:
             logger.error(f"Error during model prediction: {str(e)}")
             return f"Error during model prediction: {str(e)}"
@@ -115,4 +134,4 @@ demo = gr.Interface(
 )
 
 if __name__ == "__main__":
-    demo.launch()  # Removed share=True as it's not needed on Hugging Face Spaces
+    demo.launch()
