@@ -3,7 +3,8 @@ import gradio as gr
 from utils import PIIMasker
 import pickle
 import logging
-import sys
+import joblib
+from sklearn.base import BaseEstimator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 pii_masker = PIIMasker()
 
 # Load the trained model
-MODEL_DIR = "model"  # Changed back to "model" directory
+MODEL_DIR = "model"
 MODEL_PATH = os.path.join(MODEL_DIR, "email_classifier.pkl")
 
 def load_model():
@@ -28,7 +29,7 @@ def load_model():
             return None
             
         with open(MODEL_PATH, 'rb') as f:
-            model = pickle.load(f)
+            model = joblib.load(f)
         logger.info("Model loaded successfully!")
         return model
     except Exception as e:
@@ -113,6 +114,5 @@ demo = gr.Interface(
     ]
 )
 
-# Launch the interface
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860)
+    demo.launch()  # Removed share=True as it's not needed on Hugging Face Spaces
